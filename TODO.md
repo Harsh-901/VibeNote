@@ -1,0 +1,7 @@
+- [ ] Rewrite _generateFaceParticles to create circuit traces instead of particles.
+- [ ] Define paths for head outline, eyes, nose, lips, ears using bezier curves.
+- [ ] Add small nodes at junctions.
+- [ ] Update _drawConnections to draw the circuit paths with glow.
+- [ ] Update _drawParticles to draw nodes.
+- [ ] Ensure cyan/blue color scheme with gradient brightness.
+- [ ] Test the new hologram face.
