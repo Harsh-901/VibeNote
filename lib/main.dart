@@ -1,7 +1,15 @@
-// ignore_for_file: use_super_parameters, deprecated_member_use
+// ignore_for_file: use_super_parameters, deprecated_member_use, avoid_print
 
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'dart:async';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'screens/reflection_screen.dart';
 
 void main() {
   runApp(const VibeNoteApp());
@@ -195,7 +203,6 @@ class _ParticleSphereState extends State<ParticleSphere>
   void _generateParticles() {
     final random = math.Random();
     
-    // Generate particles on a sphere surface
     for (int i = 0; i < 150; i++) {
       final theta = random.nextDouble() * 2 * math.pi;
       final phi = math.acos(2 * random.nextDouble() - 1);
@@ -265,17 +272,14 @@ class ParticleSpherePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     
-    // Sort particles by z-depth for proper layering
     final sortedParticles = List<_ParticlePosition>.from(
       particles.map((p) => _calculatePosition(p, size, center))
     )..sort((a, b) => a.z.compareTo(b.z));
 
-    // Draw particles
     for (final particle in sortedParticles) {
       _drawParticle(canvas, particle);
     }
 
-    // Draw center glow
     final glowPaint = Paint()
       ..color = const Color(0xFF6366f1).withOpacity(0.15)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40);
@@ -283,31 +287,20 @@ class ParticleSpherePainter extends CustomPainter {
   }
 
   _ParticlePosition _calculatePosition(Particle p, Size size, Offset center) {
-    // Add wave motion based on animation and audio
     final waveAmount = isActive ? (0.15 + audioLevel * 0.3) : 0.1;
     final wave = math.sin(animValue * 2 * math.pi + p.phaseOffset) * waveAmount;
     final currentRadius = p.radius * (1 + wave);
 
-    // Convert spherical to 3D cartesian
     final x = currentRadius * math.sin(p.phi) * math.cos(p.theta);
     final y = currentRadius * math.sin(p.phi) * math.sin(p.theta);
     final z = currentRadius * math.cos(p.phi);
 
-    // Simple rotation for depth effect
     final rotatedY = y * math.cos(animValue * 0.5) - z * math.sin(animValue * 0.5);
     final rotatedZ = y * math.sin(animValue * 0.5) + z * math.cos(animValue * 0.5);
 
-    // Project to 2D
-    final position = Offset(
-      center.dx + x,
-      center.dy + rotatedY,
-    );
-
-    // Calculate opacity based on z-depth
+    final position = Offset(center.dx + x, center.dy + rotatedY);
     final depthFactor = (rotatedZ + currentRadius) / (2 * currentRadius);
     final opacity = 0.3 + depthFactor * 0.7;
-
-    // Calculate size based on depth
     final particleSize = 1.5 + depthFactor * 2.0;
 
     return _ParticlePosition(
@@ -389,6 +382,55 @@ class HomeScreen extends StatelessWidget {
                     color: Colors.white.withOpacity(0.6),
                   ),
                 ),
+                const SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const ThinkingScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366f1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 16,
+                    ),
+                  ),
+                  child: const Text(
+                    'Start Thinking',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const ReflectionLibraryScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2a2a4a),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 16,
+                    ),
+                  ),
+                  child: const Text(
+                    'View Recordings',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -396,4 +438,526 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class ThinkingScreen extends StatefulWidget {
+  const ThinkingScreen({super.key});
+
+  @override
+  State<ThinkingScreen> createState() => _ThinkingScreenState();
+}
+
+class _ThinkingScreenState extends State<ThinkingScreen> {
+  final _audioRecorder = AudioRecorder();
+  final stt.SpeechToText _speechToText = stt.SpeechToText();
+  bool isListening = false;
+  bool isPaused = false;
+  double audioLevel = 0.0;
+  String? recordingPath;
+  DateTime? _recordingStartTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissionAndStart();
+  }
+
+  Future<void> _requestPermissionAndStart() async {
+    final micStatus = await Permission.microphone.request();
+    
+    if (!micStatus.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission denied')),
+        );
+      }
+      return;
+    }
+    
+    // For Android 13+, use manageExternalStorage
+    if (await Permission.manageExternalStorage.isGranted) {
+      await _startRecording();
+    } else {
+      final storageStatus = await Permission.manageExternalStorage.request();
+      if (storageStatus.isGranted) {
+        await _startRecording();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Storage permission denied')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        // Get Downloads directory
+        final directory = Directory('/storage/emulated/0/Download/VibeNote');
+
+        // Create VibeNote folder if it doesn't exist
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final filePath = '${directory.path}/vibenote_$timestamp.m4a';
+
+        await _audioRecorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc),
+          path: filePath,
+        );
+
+        setState(() {
+          isListening = true;
+          recordingPath = filePath;
+          _recordingStartTime = DateTime.now();
+        });
+
+        _listenToAmplitude();
+      }
+    } catch (e) {
+      debugPrint('Error starting recording: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  void _listenToAmplitude() async {
+    while (isListening && mounted && !isPaused) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      final amplitude = await _audioRecorder.getAmplitude();
+      
+      if (mounted) {
+        setState(() {
+          // Convert dB to 0-1 range (typical speech is -40 to -10 dB)
+          final db = amplitude.current;
+          if (db < -50) {
+            audioLevel = 0.0; // Silence
+          } else if (db > -10) {
+            audioLevel = 1.0; // Very loud
+          } else {
+            // Map -50 to -10 dB to 0.0 to 1.0
+            audioLevel = (db + 50) / 40;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _pauseRecording() async {
+    await _audioRecorder.pause();
+    setState(() {
+      isPaused = true;
+      audioLevel = 0.0;
+    });
+  }
+
+  Future<void> _resumeRecording() async {
+    await _audioRecorder.resume();
+    setState(() {
+      isPaused = false;
+    });
+    _listenToAmplitude();
+  }
+
+  Future<void> _stopRecording() async {
+    final path = await _audioRecorder.stop();
+
+    setState(() {
+      isListening = false;
+      audioLevel = 0.0;
+    });
+
+    if (mounted && path != null && path.isNotEmpty) {
+      // Transcribe the recording
+      await _transcribeRecording(path);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Recording saved and transcribed'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recording failed to save'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
+  Future<void> _transcribeRecording(String filePath) async {
+    try {
+      // Initialize speech to text
+      bool available = await _speechToText.initialize();
+      if (!available) {
+        debugPrint('Speech recognition not available');
+        return;
+      }
+
+      // For file transcription, we would need to use a different approach
+      // Since speech_to_text plugin doesn't directly support file transcription,
+      // we'll create a placeholder transcript for now
+      // In a real implementation, you would use a service like Google Speech-to-Text API
+
+      final duration = _recordingStartTime != null
+          ? DateTime.now().difference(_recordingStartTime!).inSeconds
+          : 0;
+
+      // Placeholder transcript - in real app, this would be the actual transcription
+      final transcript = 'This is a placeholder transcript. In a real implementation, this would be the transcribed text from the audio file.';
+
+      // Generate summary (placeholder)
+      final summary = 'Key insights from this thinking session.';
+
+      // Save session data
+      await _saveSession(
+        filePath: filePath,
+        timestamp: _recordingStartTime ?? DateTime.now(),
+        duration: duration,
+        transcript: transcript,
+        summary: summary,
+      );
+    } catch (e) {
+      debugPrint('Error transcribing recording: $e');
+    }
+  }
+
+  Future<void> _saveSession({
+    required String filePath,
+    required DateTime timestamp,
+    required int duration,
+    required String transcript,
+    required String summary,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get existing sessions
+      final sessionsJson = prefs.getStringList('sessions') ?? [];
+
+      // Create new session
+      final session = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'filePath': filePath,
+        'timestamp': timestamp.toIso8601String(),
+        'duration': duration,
+        'language': 'English', // Placeholder - would detect actual language
+        'transcript': transcript,
+        'summary': summary,
+      };
+
+      // Add to sessions list
+      sessionsJson.add(jsonEncode(session));
+
+      // Save back to prefs
+      await prefs.setStringList('sessions', sessionsJson);
+    } catch (e) {
+      debugPrint('Error saving session: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioRecorder.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1a1a3e), Color(0xFF0f0f1e)],
+          ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Center(
+                child: VoiceReactiveHologram(
+                  audioLevel: audioLevel,
+                  isActive: isListening && !isPaused,
+                ),
+              ),
+              
+              Positioned(
+                bottom: 40,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildControlButton(
+                      icon: isPaused ? Icons.play_arrow : Icons.pause,
+                      onTap: () {
+                        if (isPaused) {
+                          _resumeRecording();
+                        } else {
+                          _pauseRecording();
+                        }
+                      },
+                    ),
+                    
+                    _buildControlButton(
+                      icon: Icons.stop,
+                      onTap: _stopRecording,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControlButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          color: const Color(0xFF6366f1),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6366f1).withOpacity(0.4),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          color: Colors.white,
+          size: 28,
+        ),
+      ),
+    );
+  }
+}
+
+class VoiceReactiveHologram extends StatefulWidget {
+  final double audioLevel;
+  final bool isActive;
+
+  const VoiceReactiveHologram({
+    super.key,
+    required this.audioLevel,
+    required this.isActive,
+  });
+
+  @override
+  State<VoiceReactiveHologram> createState() => _VoiceReactiveHologramState();
+}
+
+class _VoiceReactiveHologramState extends State<VoiceReactiveHologram>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  final List<VoiceParticle> _particles = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+
+    _generateParticles();
+  }
+
+  void _generateParticles() {
+    final random = math.Random();
+    
+    for (int i = 0; i < 200; i++) {
+      final theta = random.nextDouble() * 2 * math.pi;
+      final phi = math.acos(2 * random.nextDouble() - 1);
+      
+      _particles.add(VoiceParticle(
+        theta: theta,
+        phi: phi,
+        baseRadius: 80 + random.nextDouble() * 20,
+        phaseOffset: random.nextDouble() * 2 * math.pi,
+        speed: 0.5 + random.nextDouble() * 0.5,
+        spikeAmount: random.nextDouble(),
+      ));
+    }
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animController,
+      builder: (context, child) {
+        return CustomPaint(
+          size: const Size(300, 300),
+          painter: VoiceHologramPainter(
+            particles: _particles,
+            animValue: _animController.value,
+            audioLevel: widget.audioLevel,
+            isActive: widget.isActive,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class VoiceParticle {
+  final double theta;
+  final double phi;
+  final double baseRadius;
+  final double phaseOffset;
+  final double speed;
+  final double spikeAmount;
+
+  VoiceParticle({
+    required this.theta,
+    required this.phi,
+    required this.baseRadius,
+    required this.phaseOffset,
+    required this.speed,
+    required this.spikeAmount,
+  });
+}
+
+class VoiceHologramPainter extends CustomPainter {
+  final List<VoiceParticle> particles;
+  final double animValue;
+  final double audioLevel;
+  final bool isActive;
+
+  VoiceHologramPainter({
+    required this.particles,
+    required this.animValue,
+    required this.audioLevel,
+    required this.isActive,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    
+    final sortedParticles = List<_VoiceParticlePosition>.from(
+      particles.map((p) => _calculatePosition(p, size, center))
+    )..sort((a, b) => a.z.compareTo(b.z));
+
+    for (final particle in sortedParticles) {
+      _drawParticle(canvas, particle);
+    }
+
+    final glowPaint = Paint()
+      ..color = const Color(0xFF6366f1).withOpacity(0.08)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 50);
+    canvas.drawCircle(center, size.width / 2.5, glowPaint);
+  }
+
+  _VoiceParticlePosition _calculatePosition(VoiceParticle p, Size size, Offset center) {
+    // Only show breathing when truly silent (audioLevel near 0)
+    final breathAmount = audioLevel < 0.05 ? 0.05 : 0.0;
+    final breath = math.sin(animValue * 2 * math.pi * 0.3) * breathAmount;
+    
+    // Voice drives expansion - main reactive effect
+    final voiceExpansion = audioLevel * 0.6;
+    
+    // Spikes only appear with voice activity
+    final spikePhase = math.sin(animValue * 2 * math.pi * p.speed + p.phaseOffset);
+    final spike = (p.spikeAmount > 0.7 && audioLevel > 0.3) 
+        ? spikePhase * 0.2 * audioLevel 
+        : 0.0;
+    
+    // Jitter only for loud/fast speech
+    final jitter = audioLevel > 0.7 
+        ? (math.Random().nextDouble() - 0.5) * 0.12 * audioLevel 
+        : 0.0;
+    
+    // Minimal wave only during silence
+    final wave = audioLevel < 0.05 
+        ? math.sin(animValue * 2 * math.pi * p.speed + p.phaseOffset) * 0.03 
+        : 0.0;
+    
+    final currentRadius = p.baseRadius * (1 + breath + voiceExpansion + wave + spike + jitter);
+
+    final x = currentRadius * math.sin(p.phi) * math.cos(p.theta);
+    final y = currentRadius * math.sin(p.phi) * math.sin(p.theta);
+    final z = currentRadius * math.cos(p.phi);
+
+    final rotY = y * math.cos(animValue * 0.3) - z * math.sin(animValue * 0.3);
+    final rotZ = y * math.sin(animValue * 0.3) + z * math.cos(animValue * 0.3);
+
+    final position = Offset(center.dx + x, center.dy + rotY);
+
+    final depthFactor = (rotZ + currentRadius) / (2 * currentRadius);
+    
+    // Brightness increases with voice
+    final baseOpacity = audioLevel > 0.1 ? 0.5 + (audioLevel * 0.3) : 0.2;
+    final opacity = baseOpacity + depthFactor * 0.5;
+
+    final particleSize = 0.8 + depthFactor * 1.5;
+
+    return _VoiceParticlePosition(
+      position: position,
+      z: rotZ,
+      opacity: opacity,
+      size: particleSize,
+    );
+  }
+
+  void _drawParticle(Canvas canvas, _VoiceParticlePosition particle) {
+    final particlePaint = Paint()
+      ..color = const Color(0xFF818cf8).withOpacity(particle.opacity)
+      ..style = PaintingStyle.fill;
+
+    final glowPaint = Paint()
+      ..color = const Color(0xFF6366f1).withOpacity(particle.opacity * 0.3)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size * 2);
+
+    canvas.drawCircle(particle.position, particle.size * 2, glowPaint);
+    canvas.drawCircle(particle.position, particle.size, particlePaint);
+  }
+
+  @override
+  bool shouldRepaint(VoiceHologramPainter oldDelegate) => true;
+}
+
+class _VoiceParticlePosition {
+  final Offset position;
+  final double z;
+  final double opacity;
+  final double size;
+
+  _VoiceParticlePosition({
+    required this.position,
+    required this.z,
+    required this.opacity,
+    required this.size,
+  });
 }
