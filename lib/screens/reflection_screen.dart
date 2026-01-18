@@ -1,8 +1,189 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
 
+// Add to pubspec.yaml:
+// speech_to_text: ^6.6.0
+// http: ^1.1.0
+
+class TranscriptionService {
+  final SpeechToText _speechToText = SpeechToText();
+  
+  // Method 1: Using Flutter's speech_to_text (real-time)
+  Future<Map<String, dynamic>> transcribeRealtime(File audioFile) async {
+    bool available = await _speechToText.initialize();
+    
+    if (!available) {
+      throw Exception('Speech recognition not available');
+    }
+    
+    String transcription = '';
+    String detectedLanguage = 'English';
+    
+    // Listen and transcribe
+    await _speechToText.listen(
+      onResult: (result) {
+        transcription = result.recognizedWords;
+        detectedLanguage = 'en-US';
+      },
+    );
+    
+    return {
+      'transcript': transcription,
+      'language': _mapLanguageCode(detectedLanguage),
+    };
+  }
+  
+  // Method 2: Using OpenAI Whisper API (more accurate, supports multiple languages)
+  Future<Map<String, dynamic>> transcribeWithWhisper(File audioFile) async {
+    const apiKey = 'YOUR_OPENAI_API_KEY'; // Replace with your key
+    
+    var request = http.MultipartRequest(
+      'POST',
+      Uri.parse('https://api.openai.com/v1/audio/transcriptions'),
+    );
+    
+    request.headers['Authorization'] = 'Bearer $apiKey';
+    request.files.add(await http.MultipartFile.fromPath('file', audioFile.path));
+    request.fields['model'] = 'whisper-1';
+    request.fields['response_format'] = 'verbose_json'; // Get language detection
+    
+    var response = await request.send();
+    var responseData = await response.stream.bytesToString();
+    var jsonData = jsonDecode(responseData);
+    
+    return {
+      'transcript': jsonData['text'],
+      'language': _mapLanguageCode(jsonData['language']),
+    };
+  }
+  
+  // Method 3: Using Google Cloud Speech-to-Text
+  Future<Map<String, dynamic>> transcribeWithGoogle(File audioFile) async {
+    const apiKey = 'YOUR_GOOGLE_API_KEY'; // Replace with your key
+    
+    // Read audio file as base64
+    final bytes = await audioFile.readAsBytes();
+    final audioContent = base64Encode(bytes);
+    
+    final response = await http.post(
+      Uri.parse('https://speech.googleapis.com/v1/speech:recognize?key=$apiKey'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'config': {
+          'encoding': 'LINEAR16',
+          'languageCode': 'en-US', // Auto-detect or specify
+          'alternativeLanguageCodes': ['hi-IN', 'mr-IN'], // Add languages
+          'enableAutomaticPunctuation': true,
+        },
+        'audio': {
+          'content': audioContent,
+        },
+      }),
+    );
+    
+    var jsonData = jsonDecode(response.body);
+    var result = jsonData['results'][0];
+    
+    return {
+      'transcript': result['alternatives'][0]['transcript'],
+      'language': _mapLanguageCode(result['languageCode']),
+    };
+  }
+  
+  String _mapLanguageCode(String code) {
+    if (code.contains('en')) return 'English';
+    if (code.contains('hi')) return 'Hindi';
+    if (code.contains('mr')) return 'Marathi';
+    if (code.contains('mixed')) return 'Hinglish';
+    return 'English';
+  }
+}
+
+// AI Service for generating summary
+class AIService {
+  Future<String> generateSummary(String transcript, String language) async {
+    const apiKey = 'YOUR_OPENAI_API_KEY';
+    
+    final response = await http.post(
+      Uri.parse('https://api.openai.com/v1/chat/completions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({
+        'model': 'gpt-4',
+        'messages': [
+          {
+            'role': 'system',
+            'content': 'You are a reflection assistant. Generate concise summaries in the SAME language as the input. If Hindi/Marathi, respond in Hindi/Marathi.',
+          },
+          {
+            'role': 'user',
+            'content': 'Summarize this reflection in 2-3 sentences in $language:\n\n$transcript',
+          },
+        ],
+      }),
+    );
+    
+    var jsonData = jsonDecode(response.body);
+    return jsonData['choices'][0]['message']['content'];
+  }
+}
+
+// Updated Recording Screen Integration
+class RecordingScreen extends StatefulWidget {
+  const RecordingScreen({super.key});
+
+  @override
+  RecordingScreenState createState() => RecordingScreenState();
+}
+
+class RecordingScreenState extends State<RecordingScreen> {
+  // final TranscriptionService _transcriptionService = TranscriptionService();
+  // final AIService _aiService = AIService();
+  
+  bool isProcessing = false;
+  String processingStatus = '';
+  
+  // Call this after recording completes
+  
+  @override
+  Widget build(BuildContext context) {
+    if (isProcessing) {
+      return Scaffold(
+        backgroundColor: Color(0xFF0A0A0F),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.white),
+              SizedBox(height: 20),
+              Text(
+                processingStatus,
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Your existing recording UI
+    return Scaffold(
+      backgroundColor: Color(0xFF0A0A0F),
+      body: Center(
+        child: Text('Recording UI', style: TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+}
+
+// Keep your existing ReflectionLibraryScreen code unchanged
 class ReflectionLibraryScreen extends StatefulWidget {
   const ReflectionLibraryScreen({super.key});
 
@@ -35,11 +216,10 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
           language: sessionMap['language'] as String,
           transcript: sessionMap['transcript'] as String,
           summary: sessionMap['summary'] as String,
-          translatedTranscript: null, // For now, no translation
+          translatedTranscript: null,
         );
       }).toList();
 
-      // Sort by timestamp (newest first)
       loadedSessions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
       setState(() {
@@ -47,7 +227,6 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
       });
     } catch (e) {
       debugPrint('Error loading sessions: $e');
-      // If loading fails, show empty list
       setState(() {
         sessions = [];
       });
@@ -196,7 +375,6 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Session Info
             Row(
               children: [
                 Icon(Icons.access_time, color: Colors.white38, size: 16),
@@ -215,8 +393,6 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
               ],
             ),
             SizedBox(height: 30),
-
-            // Transcript
             Text(
               'Transcript',
               style: TextStyle(
@@ -245,8 +421,6 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
               ),
             ),
             SizedBox(height: 24),
-
-            // Summary
             Text(
               'Reflection Summary',
               style: TextStyle(
@@ -272,41 +446,6 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
                 ),
               ),
             ),
-            SizedBox(height: 30),
-
-            // Translate Button
-            if (selectedSession!.translatedTranscript != null)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      showTranslation = !showTranslation;
-                    });
-                  },
-                  icon: Icon(
-                    Icons.translate,
-                    size: 18,
-                    color: showTranslation ? Color(0xFF0A0A0F) : Colors.white,
-                  ),
-                  label: Text(
-                    showTranslation ? 'Show Original' : 'Translate to English',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: showTranslation ? Color(0xFF0A0A0F) : Colors.white,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: showTranslation ? Colors.white : Color(0xFF2A2A3A),
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -338,7 +477,7 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
 class Session {
   final String id;
   final DateTime timestamp;
-  final int duration; // in seconds
+  final int duration;
   final String language;
   final String transcript;
   final String summary;

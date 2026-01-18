@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'screens/reflection_screen.dart';
 
 void main() {
@@ -450,17 +451,58 @@ class ThinkingScreen extends StatefulWidget {
 class _ThinkingScreenState extends State<ThinkingScreen> {
   final _audioRecorder = AudioRecorder();
   final stt.SpeechToText _speechToText = stt.SpeechToText();
+  final TranscriptionService _transcriptionService = TranscriptionService();
+  final AIService _aiService = AIService();
   bool isListening = false;
   bool isPaused = false;
   double audioLevel = 0.0;
   String? recordingPath;
   DateTime? _recordingStartTime;
 
+
   @override
   void initState() {
     super.initState();
     _requestPermissionAndStart();
   }
+  
+  Future<void> processRecording(File audioFile) async {
+  try {
+    const apiKey = '4a71ffd2331144269ad77e3b82de955d02cd5736'; // Get from deepgram.com
+    
+    final bytes = await audioFile.readAsBytes();
+    
+    final response = await http.post(
+      Uri.parse('https://api.deepgram.com/v1/listen?model=nova-2&detect_language=true&punctuate=true&smart_format=true'),
+      headers: {
+        'Authorization': 'Token $apiKey',
+        'Content-Type': 'audio/wav',
+      },
+      body: bytes,
+    );
+    
+    final data = jsonDecode(response.body);
+    final transcript = data['results']['channels'][0]['alternatives'][0]['transcript'];
+    final language = data['results']['channels'][0]['detected_language'] ?? 'en';
+    
+    // Save with transcript
+    final prefs = await SharedPreferences.getInstance();
+    final sessions = prefs.getStringList('sessions') ?? [];
+    
+    sessions.add(jsonEncode({
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'timestamp': DateTime.now().toIso8601String(),
+      'duration': _recordingStartTime != null ? DateTime.now().difference(_recordingStartTime!).inSeconds : 0,
+      'language': language,
+      'transcript': transcript,
+      'summary': 'Summary: ${transcript.substring(0, transcript.length > 100 ? 100 : transcript.length)}...',
+    }));
+    
+    await prefs.setStringList('sessions', sessions);
+  } catch (e) {
+    debugPrint('Error: $e');
+  }
+}
 
   Future<void> _requestPermissionAndStart() async {
     final micStatus = await Permission.microphone.request();
@@ -506,7 +548,7 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
         final filePath = '${directory.path}/vibenote_$timestamp.m4a';
 
         await _audioRecorder.start(
-          const RecordConfig(encoder: AudioEncoder.aacLc),
+          const RecordConfig(encoder: AudioEncoder.wav),
           path: filePath,
         );
 
@@ -568,35 +610,29 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
   }
 
   Future<void> _stopRecording() async {
-    final path = await _audioRecorder.stop();
+  final path = await _audioRecorder.stop();
 
-    setState(() {
-      isListening = false;
-      audioLevel = 0.0;
-    });
+  setState(() {
+    isListening = false;
+    audioLevel = 0.0;
+  });
 
-    if (mounted && path != null && path.isNotEmpty) {
-      // Transcribe the recording
-      await _transcribeRecording(path);
+  if (mounted && path != null && path.isNotEmpty) {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Recording saved and transcribed'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        Navigator.of(context).pop();
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recording failed to save'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        Navigator.of(context).pop();
+    // Process the recording
+    await processRecording(File(path));  // ← ADD THIS
+
+    if (mounted) {
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Go back to home
       }
     }
   }
