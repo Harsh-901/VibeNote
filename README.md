@@ -3,9 +3,10 @@
 # 🌍 Atmos Twin
 
 ### Urban Environmental Digital Twin & Policy Decision-Support Ecosystem
-*HackMatrix 5.0 • Track: Energy • Problem Statement: ENR-01*
 
-*Real-time AQI Twin • Multi-Horizon Forecasting • Explainable Source Attribution • What-If Scenario Sandbox • Grounded Civic AI*
+_HackMatrix 5.0 • Track: Energy • Problem Statement: ENR-01_
+
+_Real-time AQI Twin • Multi-Horizon Forecasting • Explainable Source Attribution • What-If Scenario Sandbox • Grounded Civic AI_
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -16,8 +17,7 @@
 [![XGBoost](https://img.shields.io/badge/XGBoost-Gradient_Boosting-EB5424?logo=xgboost&logoColor=white)](https://xgboost.readthedocs.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-<!-- Add a hero screenshot here -->
-<!-- ![Atmos Twin Live Instrument Dashboard](images/dashboard.png) -->
+![Atmos Twin Live Instrument Dashboard](images/dashboard.png)
 
 </div>
 
@@ -57,16 +57,19 @@
 ## 🧠 ML Models & Intelligence Systems
 
 ### 1. Multi-Horizon Station-Level Forecasting Model (XGBoost Regressor)
+
 - **Where it is used**: `Backend/app/services/aqi_service.py` & Offline Training Notebook (`forecasting_model.pkl`)
 - **What it does**: Predicts composite AQI values across 1-day, 2-day, and 3-day future horizons ($t+1, t+2, t+3$) per individual monitoring station. Implements full recursive lag vector shifting (`aqi_lag_1`, `aqi_lag_2`, `aqi_lag_3`, `aqi_lag_7`) with dynamic recalculation of trailing 7-day rolling means and standard deviations, combined with cyclical day-of-year encoding (`doy_sin`, `doy_cos`) and live meteorological parameters.
-- **Dataset & Metrics**: Trained on CPCB station data from the Kaggle *Air Quality Data in India (2015–2020)* archive joined with Open-Meteo historical weather archives. Evaluated on a chronological 80/20 train/test split. Achieves **<12.4 MAE on 24-hour horizon** and maintains calibration across hazardous severity bands.
+- **Dataset & Metrics**: Trained on CPCB station data from the Kaggle _Air Quality Data in India (2015–2020)_ archive joined with Open-Meteo historical weather archives. Evaluated on a chronological 80/20 train/test split. Achieves **<12.4 MAE on 24-hour horizon** and maintains calibration across hazardous severity bands.
 
 ### 2. Quantile Uncertainty Estimation Engine (Triple XGBoost Regressors)
+
 - **Where it is used**: Offline Training Pipeline & Backend Forecasting Service (`quantile_model_q10.pkl`, `quantile_model_q50.pkl`, `quantile_model_q90.pkl`)
 - **What it does**: Computes asymmetric confidence envelopes around every point forecast using `objective='reg:quantileerror'` configured at $\alpha = 0.1$, $\alpha = 0.5$, and $\alpha = 0.9$. Includes monotonic anti-crossing enforcement ($q_{10} \le q_{50} \le q_{90}$) to guarantee mathematically coherent uncertainty bands during extreme pollution events.
 - **Dataset & Metrics**: Achieves **~79.8% empirical test coverage rate** (target 80% between $q_{10}$ and $q_{90}$), ensuring decision-makers see calibrated risk bands rather than false certainty.
 
 ### 3. Explainable Source Attribution Engine (SHAP TreeExplainer)
+
 - **Where it is used**: `Backend/app/routes/advisor.py` & Offline Explainer Notebook (`shap_summary.png`)
 - **What it does**: Derives exact Shapley additive explanations directly from the trained forecasting model without maintaining a disconnected secondary model. Dynamically clusters feature contributions into three physical buckets:
   - **Traffic-like bucket**: Local transport emissions based on `traffic_proxy` and corridor indicators.
@@ -75,16 +78,19 @@
 - **Dataset & Metrics**: Evaluated per station-type cluster (`traffic_corridor`, `industrial_belt`, `residential_background`), providing geographically distinct source attributions rather than flat city-wide averages.
 
 ### 4. Spatial Interpolation & Trust Uncertainty Surface (Gaussian Process Regression)
+
 - **Where it is used**: `Backend/app/routes/aqi.py` (`/twin/{city}/hotspots`) & Spatial Map Visualizer
 - **What it does**: Transforms sparse, discrete station readings into a continuous $50 \times 50$ city-wide pollution surface using Scikit-Learn `GaussianProcessRegressor` equipped with an $RBF(\text{length\_scale}=5.0\text{km}) + \text{WhiteKernel}(\text{noise}=1.0)$ kernel fitted over projected local metric coordinates. Concurrently produces a point-by-point predictive variance grid ($\sigma^2$) powering the interactive **Map Trust/Confidence Overlay**.
 - **Dataset & Metrics**: Validated via Leave-One-Station-Out (LOSO) cross-validation across 35+ Delhi CPCB stations, yielding an interpolation MAE of **~8.7 AQI points** in monitored clusters.
 
 ### 5. Twin Drift Anomaly Detector (Residual Divergence & CUSUM)
+
 - **Where it is used**: `Backend/app/services/drift_service.py` & Ingestion Stream Worker (`Backend/ingestion/consumer.py`)
 - **What it does**: Evaluates divergence between replayed/live sensor streams and latest stored forecast snapshots. Triggers **Twin Drift Alerts** when residual errors breach a configurable threshold ($\ge 25\%$), flagging acute external disruptions (e.g. firecracker bursts, sudden crop residue burning plumes, sensor telemetry faults).
 - **Key Concept**: True digital twin synchronization verification that distinguishes expected diurnal atmospheric cycles from unpredicted real-world shocks.
 
 ### 6. Grounded Civic LLM Advisor (Google Gemini 1.5 Flash)
+
 - **Where it is used**: `Backend/app/services/gemini_service.py` (`/advisor/ask`, `/advisor/briefing/{city}`)
 - **What it does**: Provides zero-hallucination, policy-grade conversational intelligence. Strictly bounds Gemini 1.5 Flash using live WAQI readings, station-specific attribution breakdowns, forecast peaks, and emergency protocol bands (GRAP-I through IV). Supports English, Hindi, and Marathi with automated daily civic briefing generation.
 
@@ -92,45 +98,48 @@
 
 ## 🌟 Overview
 
-**Atmos Twin** is an urban environmental digital twin and policy decision-support platform designed for municipal authorities, urban planners, environmental researchers, and citizens. Traditional air-quality portals act merely as passive digital thermometers—displaying historical numbers and color codes without explaining *why* the air is polluted or *which intervention* would tangibly improve public health.
+**Atmos Twin** is an urban environmental digital twin and policy decision-support platform designed for municipal authorities, urban planners, environmental researchers, and citizens. Traditional air-quality portals act merely as passive digital thermometers—displaying historical numbers and color codes without explaining _why_ the air is polluted or _which intervention_ would tangibly improve public health.
 
 Atmos Twin bridges the gap between raw air-quality telemetry and actionable urban governance across **five core subsystems**:
 
-| Subsystem | Technology | Purpose |
-|-----------|-----------|---------|
-| ⚙️ **Serving Engine** | FastAPI / Pydantic / Uvicorn | High-performance asynchronous REST API serving real-time twin data, scenarios, and analytics |
-| 🌊 **Event Stream** | Redis Streams / Redis 7 | Sensor data replay, pub/sub consumer groups, rolling working datasets, and drift snapshots |
-| 🧠 **Predictive Core** | XGBoost / SHAP / Scikit-Learn GP | Station forecasting, quantile confidence intervals, source attribution, and spatial interpolation |
-| 🗺️ **Spatial Instrument** | Vite / Vanilla CSS / MapTiler SDK | Dark flight-deck dashboard with real-time vector particle dispersion, heatmaps, and time scrubbers |
-| 🤖 **Grounded AI** | Google Gemini 1.5 Flash | Multilingual civic advisor and auto-generated daily executive briefings bound strictly to live telemetry |
+| Subsystem                 | Technology                        | Purpose                                                                                                  |
+| ------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ⚙️ **Serving Engine**     | FastAPI / Pydantic / Uvicorn      | High-performance asynchronous REST API serving real-time twin data, scenarios, and analytics             |
+| 🌊 **Event Stream**       | Redis Streams / Redis 7           | Sensor data replay, pub/sub consumer groups, rolling working datasets, and drift snapshots               |
+| 🧠 **Predictive Core**    | XGBoost / SHAP / Scikit-Learn GP  | Station forecasting, quantile confidence intervals, source attribution, and spatial interpolation        |
+| 🗺️ **Spatial Instrument** | Vite / Vanilla CSS / MapTiler SDK | Dark flight-deck dashboard with real-time vector particle dispersion, heatmaps, and time scrubbers       |
+| 🤖 **Grounded AI**        | Google Gemini 1.5 Flash           | Multilingual civic advisor and auto-generated daily executive briefings bound strictly to live telemetry |
 
 ### Why Atmos Twin Matters (Traditional Monitors vs. Atmos Twin)
 
-| Traditional Portals (CPCB / Commercial Apps) | Atmos Twin Decision-Support Platform |
-|---|---|
-| Broadcasts a static number and passive health warning | Provides an **interactive decision-support simulator** to compare policy outcomes |
-| Sparse station dots leave vast residential zones blank | **Gaussian Process spatial interpolation** creates a continuous city-wide heatmap |
-| Shows a single forecast number with false certainty | Displays **quantified confidence envelopes ($q_{10}$ to $q_{90}$)** based on model uncertainty |
-| Source attribution hidden inside offline research papers | **Real-time, explainable SHAP attribution** broken down by station and zone |
-| No mechanism to test policies before implementation | **Policy sandbox** simulating traffic curbs, construction bans, mist guns, and green buffers |
-| Passive alerts only after hazardous levels are reached | **Proactive threshold forecasts** and real-time **Twin Drift anomaly alerts** |
-| Static snapshot of the current hour | **Time-scrub slider** traversing 7 days of historical telemetry into 3-day forecasts |
+| Traditional Portals (CPCB / Commercial Apps)             | Atmos Twin Decision-Support Platform                                                           |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Broadcasts a static number and passive health warning    | Provides an **interactive decision-support simulator** to compare policy outcomes              |
+| Sparse station dots leave vast residential zones blank   | **Gaussian Process spatial interpolation** creates a continuous city-wide heatmap              |
+| Shows a single forecast number with false certainty      | Displays **quantified confidence envelopes ($q_{10}$ to $q_{90}$)** based on model uncertainty |
+| Source attribution hidden inside offline research papers | **Real-time, explainable SHAP attribution** broken down by station and zone                    |
+| No mechanism to test policies before implementation      | **Policy sandbox** simulating traffic curbs, construction bans, mist guns, and green buffers   |
+| Passive alerts only after hazardous levels are reached   | **Proactive threshold forecasts** and real-time **Twin Drift anomaly alerts**                  |
+| Static snapshot of the current hour                      | **Time-scrub slider** traversing 7 days of historical telemetry into 3-day forecasts           |
 
 ---
 
 ## ✨ Key Features
 
 ### 🗺️ Continuous Spatial Heatmap & Wind Vector Particle Flow
+
 - Real-time WebGL map powered by MapTiler SDK with continuous Gaussian Process interpolation.
 - Thousands of dynamic canvas wind particles streaming along meteorological $u/v$ vectors to visually model pollutant dispersion across urban valleys.
 - **Trust & Confidence Overlay**: Visualizes spatial certainty—monitored clusters glow solid while interpolated zones display calibrated uncertainty gradients.
 
 ### 🔮 Multi-Day Forecast with Quantile Uncertainty Bands
+
 - Predicts station-by-station AQI for 24h, 48h, and 72h future horizons.
 - Evaluates recursive lag dynamics to account for persistent pollution stagnation during winter atmospheric inversions.
 - Visualizes 10th-to-90th percentile confidence envelopes so city officials understand best-case and worst-case environmental bounds.
 
 ### 🧪 Interactive What-If Scenario Simulator
+
 - Policy sandbox with real-time sliders for:
   - **Traffic Restrictions** (0% to 70% reduction)
   - **Industrial Emission Curbs** (0% to 80% reduction)
@@ -139,26 +148,31 @@ Atmos Twin bridges the gap between raw air-quality telemetry and actionable urba
 - Automatically evaluates non-linear emission response, re-calculates city AQI, and translates outcomes into health and financial savings.
 
 ### 🏛️ Mayor Mode & Intervention ROI Leaderboard
+
 - Ranks urban interventions by **AQI Reduction per ₹ Crore spent**.
 - Budget allocation sandbox allowing municipal administrators to simulate policy packages within capital constraints.
 - Real-time estimation of **Avoided Emergency Room Visits**, acute respiratory hospitalizations, and economic work-loss savings.
 
 ### 🔍 Explainable Source Attribution Engine
+
 - Real-time decomposition of pollution into **Vehicular**, **Industrial**, and **Weather/Stagnation** drivers.
 - Station-specific feature contribution analysis using TreeExplainer SHAP values.
 - Enables targeted local action (e.g. anti-smog guns at transit chokepoints vs. stack audits in industrial belts).
 
 ### 🚨 Twin Drift Anomaly Detection
+
 - Continuously monitors live/replayed sensor data against the twin's forecast snapshot.
 - Automatically flags anomalies when divergence exceeds $25\%$, identifying localized episodic events (e.g., sudden biomass burning, illegal night-time factory emissions).
 
 ### 🏙️ Ward-Level Comparative Breakdown
+
 - Granular breakdown of municipal wards (covering Pune, Mumbai, Delhi, Nashik, Thane, and Akurdi).
 - Displays dominant emission drivers, micro-climate vulnerabilities, and targeted regulatory recommendations per ward.
 
 ### 🤖 Grounded Multilingual Civic Advisor
+
 - Natural-language interface powered by Google Gemini 1.5 Flash.
-- Answers civic queries (e.g., *"Should primary schools stay closed tomorrow in East Delhi?"*, *"What is driving the AQI spike in Bhosari?"*).
+- Answers civic queries (e.g., _"Should primary schools stay closed tomorrow in East Delhi?"_, _"What is driving the AQI spike in Bhosari?"_).
 - Formats responses in **English, Hindi, and Marathi**, complete with citations of underlying sensor metrics and confidence levels.
 - One-click **Executive Daily Briefing** generator producing structured print-ready reports.
 
@@ -167,36 +181,39 @@ Atmos Twin bridges the gap between raw air-quality telemetry and actionable urba
 ## 🛠️ Tech Stack
 
 ### Backend & Ingestion
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| Python | 3.10+ | Core runtime environment |
-| FastAPI | 0.115.0 | High-performance asynchronous REST API framework |
-| Uvicorn | 0.30.6 | ASGI web server |
-| Redis / Redis Streams | 5.0.8 / 7-alpine | In-memory message bus, sensor telemetry queues, and caching |
-| Pydantic & Pydantic-Settings | 2.9.2 / 2.5.2 | Request/response schema validation and settings management |
-| HTTPX | 0.27.2 | Asynchronous upstream HTTP client (WAQI & OpenWeather) |
-| Google Generative AI | 0.8.2 | Google Gemini 1.5 Flash API integration |
-| Docker & Docker Compose | 3.9 spec | Multi-container orchestration (Redis, API, Producer, Consumer) |
+
+| Technology                   | Version          | Purpose                                                        |
+| ---------------------------- | ---------------- | -------------------------------------------------------------- |
+| Python                       | 3.10+            | Core runtime environment                                       |
+| FastAPI                      | 0.115.0          | High-performance asynchronous REST API framework               |
+| Uvicorn                      | 0.30.6           | ASGI web server                                                |
+| Redis / Redis Streams        | 5.0.8 / 7-alpine | In-memory message bus, sensor telemetry queues, and caching    |
+| Pydantic & Pydantic-Settings | 2.9.2 / 2.5.2    | Request/response schema validation and settings management     |
+| HTTPX                        | 0.27.2           | Asynchronous upstream HTTP client (WAQI & OpenWeather)         |
+| Google Generative AI         | 0.8.2            | Google Gemini 1.5 Flash API integration                        |
+| Docker & Docker Compose      | 3.9 spec         | Multi-container orchestration (Redis, API, Producer, Consumer) |
 
 ### Machine Learning & Analytics
-| Library | Purpose |
-|---------|---------|
-| XGBoost | Gradient boosted decision trees for multi-step AQI forecasting and quantile regression |
-| SHAP | TreeExplainer for exact Shapley value computation and source attribution |
-| Scikit-Learn | GaussianProcessRegressor (RBF + WhiteKernel) for spatial surface generation |
-| Pandas & NumPy | High-performance tabular data wrangling and recursive lag calculations |
-| Joblib | Model artifact serialization and runtime deserialization |
-| Open-Meteo API | Keyless historical weather and meteorological vector extraction |
+
+| Library        | Purpose                                                                                |
+| -------------- | -------------------------------------------------------------------------------------- |
+| XGBoost        | Gradient boosted decision trees for multi-step AQI forecasting and quantile regression |
+| SHAP           | TreeExplainer for exact Shapley value computation and source attribution               |
+| Scikit-Learn   | GaussianProcessRegressor (RBF + WhiteKernel) for spatial surface generation            |
+| Pandas & NumPy | High-performance tabular data wrangling and recursive lag calculations                 |
+| Joblib         | Model artifact serialization and runtime deserialization                               |
+| Open-Meteo API | Keyless historical weather and meteorological vector extraction                        |
 
 ### Frontend & Data Visualization
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| Vite | 5.4 | Fast ESM development server and production bundler |
-| Vanilla JavaScript (ES Modules) | ES2022+ | Modular client architecture without bloated framework overhead |
-| Modern Vanilla CSS | Custom Design System | Dark flight-deck aesthetic (`#0B0D10` canvas, AQI severity accents) |
-| MapTiler SDK | 4.1.0 | High-performance WebGL vector mapping and geospatial raster layers |
-| HTML5 Canvas API | Native | Real-time particle physics engine for wind dispersion modeling |
-| Space Grotesk / Inter / JetBrains Mono | Google Fonts | Data-dense typography hierarchy for technical dashboard readouts |
+
+| Technology                             | Version              | Purpose                                                             |
+| -------------------------------------- | -------------------- | ------------------------------------------------------------------- |
+| Vite                                   | 5.4                  | Fast ESM development server and production bundler                  |
+| Vanilla JavaScript (ES Modules)        | ES2022+              | Modular client architecture without bloated framework overhead      |
+| Modern Vanilla CSS                     | Custom Design System | Dark flight-deck aesthetic (`#0B0D10` canvas, AQI severity accents) |
+| MapTiler SDK                           | 4.1.0                | High-performance WebGL vector mapping and geospatial raster layers  |
+| HTML5 Canvas API                       | Native               | Real-time particle physics engine for wind dispersion modeling      |
+| Space Grotesk / Inter / JetBrains Mono | Google Fonts         | Data-dense typography hierarchy for technical dashboard readouts    |
 
 ---
 
@@ -204,24 +221,19 @@ Atmos Twin bridges the gap between raw air-quality telemetry and actionable urba
 
 ![alt text](docs/Architecture.png)
 
-
 ### Architecture Diagrams
 
 #### 1. End-to-End System Architecture Diagram
-
 
 ![alt text](docs/End-to-EndSystemArchitectureDiagram.png)
 
 #### 2. Machine Learning & Spatial Interpolation Pipeline
 
-
 ![alt text](docs/ML_pipeline.png)
 
 #### 3. Real-Time Twin Drift & Feedback Loop
 
-
-![alt text](<docs/Real-Time Twin Drift & Feedback Loop.png>)
-```
+![Real-Time Twin Drift & Feedback Loop](docs/Real-Time-Twin-Drift-Feedback-Loop.png)
 
 ---
 
@@ -314,6 +326,7 @@ Hackmatrix/
 ### Prerequisites
 
 Ensure you have the following installed on your host system:
+
 - **Python 3.10+** (with `pip` and virtual environment support)
 - **Node.js 18+** and **npm**
 - **Redis 7+** (installed locally or running via Docker)
@@ -329,12 +342,14 @@ Ensure you have the following installed on your host system:
 ### Installation
 
 #### 1. Clone the Repository
+
 ```bash
 git clone https://github.com/your-username/Hackmatrix.git
 cd Hackmatrix
 ```
 
 #### 2. Backend Setup
+
 ```bash
 cd Backend
 
@@ -350,6 +365,7 @@ pip install -r requirements.txt
 ```
 
 #### 3. Frontend Setup
+
 ```bash
 cd ../Frontend
 
@@ -362,6 +378,7 @@ npm install
 ### Environment Variables
 
 #### Backend Configuration (`Backend/.env`)
+
 Create a `.env` file in the `Backend/` directory:
 
 ```env
@@ -390,6 +407,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
 #### Frontend Configuration (`Frontend/.env`)
+
 Create a `.env` file in the `Frontend/` directory:
 
 ```env
@@ -423,15 +441,16 @@ To enable simulated real-time streaming, historical event replays, and twin drif
 
 Run each service in a separate terminal:
 
-| Service | Terminal Command | Description |
-|---------|------------------|-------------|
-| **Redis Server** | `redis-server` | Starts local in-memory message broker (port 6379) |
-| **FastAPI Backend** | `cd Backend && uvicorn main:app --reload --port 8000` | Starts REST API & Gemini advisor (port 8000) |
-| **Stream Consumer** | `cd Backend && python -m ingestion.consumer` | Continuously consumes Redis sensor stream |
-| **Stream Producer** | `cd Backend && python -m ingestion.producer --city Delhi --speed 2.0` | Replays sensor telemetry into Redis stream |
-| **Frontend UI** | `cd Frontend && npm run dev` | Launches Vite dev server with HMR (port 5173) |
+| Service             | Terminal Command                                                      | Description                                       |
+| ------------------- | --------------------------------------------------------------------- | ------------------------------------------------- |
+| **Redis Server**    | `redis-server`                                                        | Starts local in-memory message broker (port 6379) |
+| **FastAPI Backend** | `cd Backend && uvicorn main:app --reload --port 8000`                 | Starts REST API & Gemini advisor (port 8000)      |
+| **Stream Consumer** | `cd Backend && python -m ingestion.consumer`                          | Continuously consumes Redis sensor stream         |
+| **Stream Producer** | `cd Backend && python -m ingestion.producer --city Delhi --speed 2.0` | Replays sensor telemetry into Redis stream        |
+| **Frontend UI**     | `cd Frontend && npm run dev`                                          | Launches Vite dev server with HMR (port 5173)     |
 
 #### Quick Start (Access URLs):
+
 - 🌐 **Web Client**: [http://localhost:5173](http://localhost:5173)
 - 📡 **Interactive API Docs (Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - 🩺 **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
@@ -453,12 +472,14 @@ docker compose ps
 ```
 
 To run the streaming ingestion worker alongside the API:
+
 ```bash
 # Start API + Redis + Stream Consumer & Producer
 docker compose --profile ingestion up -d
 ```
 
 To stop containers:
+
 ```bash
 docker compose down
 ```
@@ -469,7 +490,7 @@ docker compose down
 
 ### 1. Real-Time Ingestion & Streaming Flow
 
-![alt text](docs/Real-TimeIngestion&StreamingFlow.png)
+![Real-Time Ingestion & Streaming Flow](docs/Real-TimeIngestion-StreamingFlow.png)
 
 1. **Replay Mechanism**: The ingestion producer streams historical readings row-by-row into `atmos:sensor:stream`, preserving timestamp fidelity while offering speed scaling ($1\times$ to $10\times$).
 2. **Consumer Group Processing**: The consumer group `atmos-workers` reads incoming messages asynchronously without blocking API threads, updates a 500-event rolling memory buffer per city, and maintains live observed snapshots.
@@ -586,35 +607,35 @@ $$\text{Residual Percentage} = \frac{|\text{AQI}_{\text{Observed}} - \text{AQI}_
 
 ## 📸 Screenshots
 
-<!-- Place your screenshots in an `images/` directory in the repository root with the names below -->
-
 ### Overview & Live Instrument Dashboard
-<!-- ![Atmos Twin Flight-Deck Dashboard](images/dashboard.png) -->
-*High-density environmental command center displaying hero AQI metrics, severity glows, recursive multi-day forecasts, and active twin drift banners.*
+
+![alt text](images/dashboard.png)
+_High-density environmental command center displaying hero AQI metrics, severity glows, recursive multi-day forecasts, and active twin drift banners._
 
 ### Continuous Heatmap & Wind Vector Particle Flow
-<!-- ![Continuous Spatial Map & Wind Dispersion](images/map-heatmap.png) -->
-*MapTiler WebGL view with continuous Gaussian Process spatial interpolation and live animated wind vector particles illustrating pollutant drift across valleys.*
 
-### Spatial Trust & Uncertainty Overlay
-<!-- ![Map Confidence & Trust Overlay](images/map-trust-overlay.png) -->
-*Visual representation of model certainty—sensor-dense regions glow with solid certainty while sparsely monitored zones display calibrated confidence shading.*
+![Continuous Spatial Map & Wind Dispersion](images/map-heatmap.png)
+_MapTiler WebGL view with continuous Gaussian Process spatial interpolation and live animated wind vector particles illustrating pollutant drift across valleys._
 
 ### What-If Scenario Simulator & Policy ROI Leaderboard
-<!-- ![Scenario Simulator & Policy Sandbox](images/scenario-simulator.png) -->
-*Interactive policy levers (traffic cuts, industry curbs, mist guns) re-running model predictions live with health-cost savings and ROI rankings.*
+
+![Scenario Simulator & Policy Sandbox](images/scenario-simulator.png)
+_Interactive policy levers (traffic cuts, industry curbs, mist guns) re-running model predictions live with health-cost savings and ROI rankings._
 
 ### Grounded Civic AI Advisor & Daily Briefing
-<!-- ![Grounded Gemini AI Advisor](images/ai-advisor.png) -->
-*Conversational advisor answering civic inquiries in English, Hindi, and Marathi, grounded strictly in live telemetry and emergency response protocols.*
+
+![Grounded Gemini AI Advisor](images/ai-advisor.png)
+_Conversational advisor answering civic inquiries in English, Hindi, and Marathi, grounded strictly in live telemetry and emergency response protocols._
 
 ### Ward-Level Comparative Breakdown
-<!-- ![Ward-Level Policy Matrix](images/wards.png) -->
-*Micro-zonal ranking across municipal wards detailing dominant emission drivers, micro-climates, and targeted regulatory countermeasures.*
+
+![Ward-Level Policy Matrix](images/wards.png)
+_Micro-zonal ranking across municipal wards detailing dominant emission drivers, micro-climates, and targeted regulatory countermeasures._
 
 ### Forecast Accuracy & Self-Honesty Tracker
-<!-- ![Historical Accuracy & Drift Tracker](images/accuracy-drift.png) -->
-*Public performance ledger comparing past predictions against recorded actuals with residual distribution plots.*
+
+![Historical Accuracy & Drift Tracker](images/accuracy-drift.png)
+_Public performance ledger comparing past predictions against recorded actuals with residual distribution plots._
 
 ---
 
@@ -624,13 +645,14 @@ The FastAPI server runs on port **8000** and provides interactive OpenAPI docume
 
 ### AQI & Spatial Hotspot Endpoints
 
-| Method | Endpoint | Query / Path Parameters | Description |
-|--------|----------|-------------------------|-------------|
-| `GET` | `/twin/{city}/current` | `city: str` (e.g. `Delhi`, `Pune`, `Mumbai`) | Returns current AQI, dominant station, all station readings, and AQI band |
-| `GET` | `/twin/station/{station_id}` | `station_id: str` (Numeric UID) | Fetches single station details, coordinates, and pollutant breakdowns |
-| `GET` | `/twin/{city}/hotspots` | `city: str` | Returns continuous $50 \times 50$ interpolated grid points or station fallback points |
+| Method | Endpoint                     | Query / Path Parameters                      | Description                                                                           |
+| ------ | ---------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET`  | `/twin/{city}/current`       | `city: str` (e.g. `Delhi`, `Pune`, `Mumbai`) | Returns current AQI, dominant station, all station readings, and AQI band             |
+| `GET`  | `/twin/station/{station_id}` | `station_id: str` (Numeric UID)              | Fetches single station details, coordinates, and pollutant breakdowns                 |
+| `GET`  | `/twin/{city}/hotspots`      | `city: str`                                  | Returns continuous $50 \times 50$ interpolated grid points or station fallback points |
 
 #### Sample Response: `GET /twin/Delhi/current`
+
 ```json
 {
   "city": "Delhi",
@@ -653,12 +675,13 @@ The FastAPI server runs on port **8000** and provides interactive OpenAPI docume
 
 ### Scenario Simulation & Policy Endpoints
 
-| Method | Endpoint | Payload / Parameters | Description |
-|--------|----------|----------------------|-------------|
-| `POST` | `/scenario/simulate` | JSON: `ScenarioInput` | Re-evaluates forecast under intervention levers; returns $\Delta\text{AQI}$, health impact, and cost |
-| `GET` | `/scenario/roi-leaderboard` | `city: str`, `baseline_aqi: float` | Returns ranked list of interventions by AQI reduction per ₹ Crore |
+| Method | Endpoint                    | Payload / Parameters               | Description                                                                                          |
+| ------ | --------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `POST` | `/scenario/simulate`        | JSON: `ScenarioInput`              | Re-evaluates forecast under intervention levers; returns $\Delta\text{AQI}$, health impact, and cost |
+| `GET`  | `/scenario/roi-leaderboard` | `city: str`, `baseline_aqi: float` | Returns ranked list of interventions by AQI reduction per ₹ Crore                                    |
 
 #### Sample Request: `POST /scenario/simulate`
+
 ```json
 {
   "city": "Delhi",
@@ -671,6 +694,7 @@ The FastAPI server runs on port **8000** and provides interactive OpenAPI docume
 ```
 
 #### Sample Response:
+
 ```json
 {
   "city": "Delhi",
@@ -690,46 +714,47 @@ The FastAPI server runs on port **8000** and provides interactive OpenAPI docume
 
 ### Twin Drift & Anomaly Endpoints
 
-| Method | Endpoint | Query / Path Parameters | Description |
-|--------|----------|-------------------------|-------------|
-| `GET` | `/drift/status` | `city: str`, `threshold_pct: float` (default `25.0`) | Evaluates current divergence between replayed/live sensor readings and forecast snapshot |
-| `POST` | `/drift/forecast-snapshot` | JSON: `ForecastSnapshot` (Internal) | Ingests latest ML forecast snapshot for drift tracking |
-| `POST` | `/drift/observed-snapshot` | JSON: `ObservedSnapshot` (Internal) | Ingests latest sensor observations from stream consumer |
+| Method | Endpoint                   | Query / Path Parameters                              | Description                                                                              |
+| ------ | -------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `GET`  | `/drift/status`            | `city: str`, `threshold_pct: float` (default `25.0`) | Evaluates current divergence between replayed/live sensor readings and forecast snapshot |
+| `POST` | `/drift/forecast-snapshot` | JSON: `ForecastSnapshot` (Internal)                  | Ingests latest ML forecast snapshot for drift tracking                                   |
+| `POST` | `/drift/observed-snapshot` | JSON: `ObservedSnapshot` (Internal)                  | Ingests latest sensor observations from stream consumer                                  |
 
 ---
 
 ### Ward Analytics & Decision Matrix
 
-| Method | Endpoint | Query / Path Parameters | Description |
-|--------|----------|-------------------------|-------------|
-| `GET` | `/wards/{city}` | `city: str` (`Pune`, `Mumbai`, `Delhi`, `Nashik`, `Thane`, `Akurdi`) | Returns micro-zonal ward rankings, dominant emission sources, and recommended policy actions |
+| Method | Endpoint        | Query / Path Parameters                                              | Description                                                                                  |
+| ------ | --------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GET`  | `/wards/{city}` | `city: str` (`Pune`, `Mumbai`, `Delhi`, `Nashik`, `Thane`, `Akurdi`) | Returns micro-zonal ward rankings, dominant emission sources, and recommended policy actions |
 
 ---
 
 ### AI Advisor & Civic Briefing Endpoints
 
-| Method | Endpoint | Payload / Parameters | Description |
-|--------|----------|----------------------|-------------|
-| `POST` | `/advisor/ask` | JSON: `AdvisorRequest` (`question`, `city`, `language`) | Answers civic air quality inquiries grounded in live telemetry; supports `en`, `hi`, `mr` |
-| `GET` | `/advisor/briefing/{city}` | `city: str`, `language: str` (default `en`) | Generates a structured, print-ready daily air quality executive briefing |
+| Method | Endpoint                   | Payload / Parameters                                    | Description                                                                               |
+| ------ | -------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `POST` | `/advisor/ask`             | JSON: `AdvisorRequest` (`question`, `city`, `language`) | Answers civic air quality inquiries grounded in live telemetry; supports `en`, `hi`, `mr` |
+| `GET`  | `/advisor/briefing/{city}` | `city: str`, `language: str` (default `en`)             | Generates a structured, print-ready daily air quality executive briefing                  |
 
 ---
 
 ### Weather & System Health Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/weather/{city}` | Current weather parameters, temperature, humidity, wind speed, and wind direction |
-| `GET` | `/health` | System liveness probe and Redis connection verification |
-| `GET` | `/docs` | Interactive Swagger UI API playground |
+| Method | Endpoint          | Description                                                                       |
+| ------ | ----------------- | --------------------------------------------------------------------------------- |
+| `GET`  | `/weather/{city}` | Current weather parameters, temperature, humidity, wind speed, and wind direction |
+| `GET`  | `/health`         | System liveness probe and Redis connection verification                           |
+| `GET`  | `/docs`           | Interactive Swagger UI API playground                                             |
 
 ---
 
 ## 🔧 Troubleshooting
 
 ### 1. Redis Connection Error / Backend Won't Start
-* **Symptom**: `WARNING: Redis not reachable — Error connecting to localhost:6379`
-* **Resolution**:
+
+- **Symptom**: `WARNING: Redis not reachable — Error connecting to localhost:6379`
+- **Resolution**:
   - Verify Redis is running locally:
     ```bash
     redis-cli ping
@@ -742,26 +767,30 @@ The FastAPI server runs on port **8000** and provides interactive OpenAPI docume
   - Check that `REDIS_URL` in `Backend/.env` matches your environment (`redis://localhost:6379` for local run, `redis://redis:6379` inside Docker).
 
 ### 2. Stream Producer Can't Find Dataset
-* **Symptom**: `[ERROR] Dataset not found at .../Backend/data/city_day.csv`
-* **Resolution**:
-  - Ensure the Kaggle *Air Quality Data in India (2015–2020)* files are unzipped inside `Backend/data/`.
+
+- **Symptom**: `[ERROR] Dataset not found at .../Backend/data/city_day.csv`
+- **Resolution**:
+  - Ensure the Kaggle _Air Quality Data in India (2015–2020)_ files are unzipped inside `Backend/data/`.
   - Confirm the filenames match `station_day.csv` and `city_day.csv`.
 
 ### 3. MapTiler Vector Map Renders Blank / Map Error
-* **Symptom**: Black screen in map view or 403 Forbidden errors in browser console.
-* **Resolution**:
+
+- **Symptom**: Black screen in map view or 403 Forbidden errors in browser console.
+- **Resolution**:
   - Verify `VITE_MAPTILER_KEY` is present in `Frontend/.env`.
   - Get a free key from [cloud.maptiler.com](https://cloud.maptiler.com/) and restart the Vite server (`npm run dev`).
 
 ### 4. Gemini Advisor Returns Upstream Error (502)
-* **Symptom**: `Gemini API error: API key not valid`
-* **Resolution**:
+
+- **Symptom**: `Gemini API error: API key not valid`
+- **Resolution**:
   - Check that `GEMINI_API_KEY` is set in `Backend/.env`.
   - Obtain a key from [Google AI Studio](https://aistudio.google.com/) and ensure API quotas are active for Gemini 1.5 Flash.
 
 ### 5. CORS Header Block on Localhost
-* **Symptom**: `Access to fetch at 'http://localhost:8000/...' from origin 'http://localhost:5173' has been blocked by CORS policy`
-* **Resolution**:
+
+- **Symptom**: `Access to fetch at 'http://localhost:8000/...' from origin 'http://localhost:5173' has been blocked by CORS policy`
+- **Resolution**:
   - Verify that `CORS_ORIGINS` in `Backend/.env` includes `http://localhost:5173`.
   - Restart the FastAPI backend server after updating `.env`.
 
@@ -794,7 +823,7 @@ We welcome contributions to extend Atmos Twin's capabilities, add new municipal 
 - **Hackathon Context**: Developed for **HackMatrix 5.0** under the **Energy Track (Problem Statement: ENR-01 — Urban Environmental Digital Twin)**.
 - **Data Acknowledgments**:
   - Central Pollution Control Board (CPCB), Government of India.
-  - Rohan Rao for compiling and maintaining the Kaggle *Air Quality Data in India (2015–2020)* archive.
+  - Rohan Rao for compiling and maintaining the Kaggle _Air Quality Data in India (2015–2020)_ archive.
   - World Air Quality Index (WAQI) Project for open real-time air quality APIs.
   - Open-Meteo & OpenWeatherMap for open meteorological and wind vector APIs.
 
