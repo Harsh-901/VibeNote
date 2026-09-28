@@ -10,6 +10,8 @@ import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path_provider/path_provider.dart';
 import 'screens/reflection_screen.dart';
 
 void main() {
@@ -58,13 +60,16 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
     );
 
-    _scaleAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 1),
-    ]).animate(CurvedAnimation(
-      parent: _heartbeatController,
-      curve: Curves.easeInOut,
-    ));
+    _scaleAnimation =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 1),
+          TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 1),
+        ]).animate(
+          CurvedAnimation(
+            parent: _heartbeatController,
+            curve: Curves.easeInOut,
+          ),
+        );
 
     _expandController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -75,9 +80,10 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _expandController, curve: Curves.easeInOut),
     );
 
-    _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _expandController, curve: Curves.easeIn),
-    );
+    _opacityAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _expandController, curve: Curves.easeIn));
 
     _startAnimations();
   }
@@ -124,8 +130,10 @@ class _SplashScreenState extends State<SplashScreen>
           children: [
             Center(
               child: AnimatedBuilder(
-                animation: Listenable.merge(
-                    [_heartbeatController, _expandController]),
+                animation: Listenable.merge([
+                  _heartbeatController,
+                  _expandController,
+                ]),
                 builder: (context, child) {
                   final scale = _scaleAnimation.value * _expandAnimation.value;
                   final opacity = _opacityAnimation.value;
@@ -203,17 +211,19 @@ class _ParticleSphereState extends State<ParticleSphere>
 
   void _generateParticles() {
     final random = math.Random();
-    
+
     for (int i = 0; i < 150; i++) {
       final theta = random.nextDouble() * 2 * math.pi;
       final phi = math.acos(2 * random.nextDouble() - 1);
-      
-      _particles.add(Particle(
-        theta: theta,
-        phi: phi,
-        radius: widget.size / 2.5,
-        phaseOffset: random.nextDouble() * 2 * math.pi,
-      ));
+
+      _particles.add(
+        Particle(
+          theta: theta,
+          phi: phi,
+          radius: widget.size / 2.5,
+          phaseOffset: random.nextDouble() * 2 * math.pi,
+        ),
+      );
     }
   }
 
@@ -272,9 +282,9 @@ class ParticleSpherePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    
+
     final sortedParticles = List<_ParticlePosition>.from(
-      particles.map((p) => _calculatePosition(p, size, center))
+      particles.map((p) => _calculatePosition(p, size, center)),
     )..sort((a, b) => a.z.compareTo(b.z));
 
     for (final particle in sortedParticles) {
@@ -296,8 +306,10 @@ class ParticleSpherePainter extends CustomPainter {
     final y = currentRadius * math.sin(p.phi) * math.sin(p.theta);
     final z = currentRadius * math.cos(p.phi);
 
-    final rotatedY = y * math.cos(animValue * 0.5) - z * math.sin(animValue * 0.5);
-    final rotatedZ = y * math.sin(animValue * 0.5) + z * math.cos(animValue * 0.5);
+    final rotatedY =
+        y * math.cos(animValue * 0.5) - z * math.sin(animValue * 0.5);
+    final rotatedZ =
+        y * math.sin(animValue * 0.5) + z * math.cos(animValue * 0.5);
 
     final position = Offset(center.dx + x, center.dy + rotatedY);
     final depthFactor = (rotatedZ + currentRadius) / (2 * currentRadius);
@@ -362,10 +374,7 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  '🧠',
-                  style: TextStyle(fontSize: 64),
-                ),
+                const Text('🧠', style: TextStyle(fontSize: 64)),
                 const SizedBox(height: 16),
                 const Text(
                   'VibeNote',
@@ -401,10 +410,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   child: const Text(
                     'Start Thinking',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -459,54 +465,87 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
   String? recordingPath;
   DateTime? _recordingStartTime;
 
-
   @override
   void initState() {
     super.initState();
     _requestPermissionAndStart();
   }
-  
+
   Future<void> processRecording(File audioFile) async {
-  try {
-    const apiKey = '4a71ffd2331144269ad77e3b82de955d02cd5736'; // Get from deepgram.com
-    
-    final bytes = await audioFile.readAsBytes();
-    
-    final response = await http.post(
-      Uri.parse('https://api.deepgram.com/v1/listen?model=nova-2&detect_language=true&punctuate=true&smart_format=true'),
-      headers: {
-        'Authorization': 'Token $apiKey',
-        'Content-Type': 'audio/wav',
-      },
-      body: bytes,
-    );
-    
-    final data = jsonDecode(response.body);
-    final transcript = data['results']['channels'][0]['alternatives'][0]['transcript'];
-    final language = data['results']['channels'][0]['detected_language'] ?? 'en';
-    
-    // Save with transcript
-    final prefs = await SharedPreferences.getInstance();
-    final sessions = prefs.getStringList('sessions') ?? [];
-    
-    sessions.add(jsonEncode({
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'timestamp': DateTime.now().toIso8601String(),
-      'duration': _recordingStartTime != null ? DateTime.now().difference(_recordingStartTime!).inSeconds : 0,
-      'language': language,
-      'transcript': transcript,
-      'summary': 'Summary: ${transcript.substring(0, transcript.length > 100 ? 100 : transcript.length)}...',
-    }));
-    
-    await prefs.setStringList('sessions', sessions);
-  } catch (e) {
-    debugPrint('Error: $e');
+    try {
+      const apiKey =
+          '4a71ffd2331144269ad77e3b82de955d02cd5736'; // Get from deepgram.com
+
+      final bytes = await audioFile.readAsBytes();
+
+      final response = await http.post(
+        Uri.parse(
+          'https://api.deepgram.com/v1/listen?model=nova-2&detect_language=true&punctuate=true&smart_format=true',
+        ),
+        headers: {
+          'Authorization': 'Token $apiKey',
+          'Content-Type': 'audio/wav',
+        },
+        body: bytes,
+      );
+
+      final data = jsonDecode(response.body);
+
+      // Log response for debugging
+      if (response.statusCode != 200) {
+        debugPrint(
+          'Deepgram API Error: ${response.statusCode} - ${response.body}',
+        );
+        return;
+      }
+
+      final alternatives = data['results']?['channels']?[0]?['alternatives'];
+      if (alternatives == null || alternatives.isEmpty) {
+        debugPrint(
+          'Deepgram API returned no alternatives. Full response: ${response.body}',
+        );
+        return;
+      }
+
+      final transcript = alternatives[0]?['transcript'] ?? '';
+      final language =
+          data['results']?['channels']?[0]?['detected_language'] ?? 'en';
+
+      // Extract words array containing timestamps and confidence
+      final words = alternatives[0]?['words'] ?? [];
+
+      // Save with transcript and words
+      final prefs = await SharedPreferences.getInstance();
+      final sessions = prefs.getStringList('sessions') ?? [];
+
+      // Generate Actual Summary
+      final aiService = AIService();
+      // Notice we await the summary generation here
+      final summary = await aiService.generateSummary(transcript, language);
+
+      sessions.add(
+        jsonEncode({
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'timestamp': DateTime.now().toIso8601String(),
+          'duration': _recordingStartTime != null
+              ? DateTime.now().difference(_recordingStartTime!).inSeconds
+              : 0,
+          'language': language,
+          'transcript': transcript,
+          'words': words, // Save the actual words array from Deepgram
+          'summary': summary,
+        }),
+      );
+
+      await prefs.setStringList('sessions', sessions);
+    } catch (e, stackTrace) {
+      debugPrint('Error in processRecording: $e\n$stackTrace');
+    }
   }
-}
 
   Future<void> _requestPermissionAndStart() async {
     final micStatus = await Permission.microphone.request();
-    
+
     if (!micStatus.isGranted) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -515,7 +554,7 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
       }
       return;
     }
-    
+
     // For Android 13+, use manageExternalStorage
     if (await Permission.manageExternalStorage.isGranted) {
       await _startRecording();
@@ -536,16 +575,25 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
   Future<void> _startRecording() async {
     try {
       if (await _audioRecorder.hasPermission()) {
-        // Get Downloads directory
-        final directory = Directory('/storage/emulated/0/Download/VibeNote');
+        String filePath;
 
-        // Create VibeNote folder if it doesn't exist
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
+        try {
+          if (Platform.isAndroid || Platform.isIOS) {
+            // Get standard app directory
+            final directory = await getApplicationDocumentsDirectory();
+            final vibeNoteDir = Directory('${directory.path}/VibeNote');
+            if (!await vibeNoteDir.exists()) {
+              await vibeNoteDir.create(recursive: true);
+            }
+            filePath =
+                '${vibeNoteDir.path}/vibenote_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          } else {
+            filePath = 'vibenote_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          }
+        } catch (e) {
+          // Fallback for Web where Platform is not supported
+          filePath = 'vibenote_${DateTime.now().millisecondsSinceEpoch}.m4a';
         }
-
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final filePath = '${directory.path}/vibenote_$timestamp.m4a';
 
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.wav),
@@ -563,9 +611,9 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
     } catch (e) {
       debugPrint('Error starting recording: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -573,9 +621,9 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
   void _listenToAmplitude() async {
     while (isListening && mounted && !isPaused) {
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       final amplitude = await _audioRecorder.getAmplitude();
-      
+
       if (mounted) {
         setState(() {
           // Convert dB to 0-1 range (typical speech is -40 to -10 dB)
@@ -610,29 +658,27 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
   }
 
   Future<void> _stopRecording() async {
-  final path = await _audioRecorder.stop();
+    final path = await _audioRecorder.stop();
 
-  setState(() {
-    isListening = false;
-    audioLevel = 0.0;
-  });
+    setState(() {
+      isListening = false;
+      audioLevel = 0.0;
+    });
 
-  if (mounted && path != null && path.isNotEmpty) {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
+    if (mounted && path != null && path.isNotEmpty) {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
 
-    // Process the recording
-    await processRecording(File(path));  // ← ADD THIS
+      // Process the recording
+      await processRecording(File(path)); // ← ADD THIS
 
-    if (mounted) {
-      Navigator.pop(context); // Close loading dialog
-      Navigator.pop(context); // Go back to home
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        Navigator.pop(context); // Go back to home
       }
     }
   }
@@ -656,7 +702,8 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
           : 0;
 
       // Placeholder transcript - in real app, this would be the actual transcription
-      final transcript = 'This is a placeholder transcript. In a real implementation, this would be the transcribed text from the audio file.';
+      final transcript =
+          'This is a placeholder transcript. In a real implementation, this would be the transcribed text from the audio file.';
 
       // Generate summary (placeholder)
       final summary = 'Key insights from this thinking session.';
@@ -734,7 +781,7 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
                   isActive: isListening && !isPaused,
                 ),
               ),
-              
+
               Positioned(
                 bottom: 40,
                 left: 0,
@@ -752,7 +799,7 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
                         }
                       },
                     ),
-                    
+
                     _buildControlButton(
                       icon: Icons.stop,
                       onTap: _stopRecording,
@@ -767,7 +814,10 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
     );
   }
 
-  Widget _buildControlButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildControlButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -784,11 +834,7 @@ class _ThinkingScreenState extends State<ThinkingScreen> {
             ),
           ],
         ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: 28,
-        ),
+        child: Icon(icon, color: Colors.white, size: 28),
       ),
     );
   }
@@ -826,19 +872,21 @@ class _VoiceReactiveHologramState extends State<VoiceReactiveHologram>
 
   void _generateParticles() {
     final random = math.Random();
-    
+
     for (int i = 0; i < 200; i++) {
       final theta = random.nextDouble() * 2 * math.pi;
       final phi = math.acos(2 * random.nextDouble() - 1);
-      
-      _particles.add(VoiceParticle(
-        theta: theta,
-        phi: phi,
-        baseRadius: 80 + random.nextDouble() * 20,
-        phaseOffset: random.nextDouble() * 2 * math.pi,
-        speed: 0.5 + random.nextDouble() * 0.5,
-        spikeAmount: random.nextDouble(),
-      ));
+
+      _particles.add(
+        VoiceParticle(
+          theta: theta,
+          phi: phi,
+          baseRadius: 80 + random.nextDouble() * 20,
+          phaseOffset: random.nextDouble() * 2 * math.pi,
+          speed: 0.5 + random.nextDouble() * 0.5,
+          spikeAmount: random.nextDouble(),
+        ),
+      );
     }
   }
 
@@ -901,9 +949,9 @@ class VoiceHologramPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    
+
     final sortedParticles = List<_VoiceParticlePosition>.from(
-      particles.map((p) => _calculatePosition(p, size, center))
+      particles.map((p) => _calculatePosition(p, size, center)),
     )..sort((a, b) => a.z.compareTo(b.z));
 
     for (final particle in sortedParticles) {
@@ -916,31 +964,38 @@ class VoiceHologramPainter extends CustomPainter {
     canvas.drawCircle(center, size.width / 2.5, glowPaint);
   }
 
-  _VoiceParticlePosition _calculatePosition(VoiceParticle p, Size size, Offset center) {
+  _VoiceParticlePosition _calculatePosition(
+    VoiceParticle p,
+    Size size,
+    Offset center,
+  ) {
     // Only show breathing when truly silent (audioLevel near 0)
     final breathAmount = audioLevel < 0.05 ? 0.05 : 0.0;
     final breath = math.sin(animValue * 2 * math.pi * 0.3) * breathAmount;
-    
+
     // Voice drives expansion - main reactive effect
     final voiceExpansion = audioLevel * 0.6;
-    
+
     // Spikes only appear with voice activity
-    final spikePhase = math.sin(animValue * 2 * math.pi * p.speed + p.phaseOffset);
-    final spike = (p.spikeAmount > 0.7 && audioLevel > 0.3) 
-        ? spikePhase * 0.2 * audioLevel 
+    final spikePhase = math.sin(
+      animValue * 2 * math.pi * p.speed + p.phaseOffset,
+    );
+    final spike = (p.spikeAmount > 0.7 && audioLevel > 0.3)
+        ? spikePhase * 0.2 * audioLevel
         : 0.0;
-    
+
     // Jitter only for loud/fast speech
-    final jitter = audioLevel > 0.7 
-        ? (math.Random().nextDouble() - 0.5) * 0.12 * audioLevel 
+    final jitter = audioLevel > 0.7
+        ? (math.Random().nextDouble() - 0.5) * 0.12 * audioLevel
         : 0.0;
-    
+
     // Minimal wave only during silence
-    final wave = audioLevel < 0.05 
-        ? math.sin(animValue * 2 * math.pi * p.speed + p.phaseOffset) * 0.03 
+    final wave = audioLevel < 0.05
+        ? math.sin(animValue * 2 * math.pi * p.speed + p.phaseOffset) * 0.03
         : 0.0;
-    
-    final currentRadius = p.baseRadius * (1 + breath + voiceExpansion + wave + spike + jitter);
+
+    final currentRadius =
+        p.baseRadius * (1 + breath + voiceExpansion + wave + spike + jitter);
 
     final x = currentRadius * math.sin(p.phi) * math.cos(p.theta);
     final y = currentRadius * math.sin(p.phi) * math.sin(p.theta);
@@ -952,7 +1007,7 @@ class VoiceHologramPainter extends CustomPainter {
     final position = Offset(center.dx + x, center.dy + rotY);
 
     final depthFactor = (rotZ + currentRadius) / (2 * currentRadius);
-    
+
     // Brightness increases with voice
     final baseOpacity = audioLevel > 0.1 ? 0.5 + (audioLevel * 0.3) : 0.2;
     final opacity = baseOpacity + depthFactor * 0.5;

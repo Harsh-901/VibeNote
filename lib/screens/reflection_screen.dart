@@ -5,6 +5,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'confidence_analysis_screen.dart';
 
 // Add to pubspec.yaml:
 // speech_to_text: ^6.6.0
@@ -12,18 +13,18 @@ import 'dart:io';
 
 class TranscriptionService {
   final SpeechToText _speechToText = SpeechToText();
-  
+
   // Method 1: Using Flutter's speech_to_text (real-time)
   Future<Map<String, dynamic>> transcribeRealtime(File audioFile) async {
     bool available = await _speechToText.initialize();
-    
+
     if (!available) {
       throw Exception('Speech recognition not available');
     }
-    
+
     String transcription = '';
     String detectedLanguage = 'English';
-    
+
     // Listen and transcribe
     await _speechToText.listen(
       onResult: (result) {
@@ -31,47 +32,52 @@ class TranscriptionService {
         detectedLanguage = 'en-US';
       },
     );
-    
+
     return {
       'transcript': transcription,
       'language': _mapLanguageCode(detectedLanguage),
     };
   }
-  
+
   // Method 2: Using OpenAI Whisper API (more accurate, supports multiple languages)
   Future<Map<String, dynamic>> transcribeWithWhisper(File audioFile) async {
     const apiKey = 'YOUR_OPENAI_API_KEY'; // Replace with your key
-    
+
     var request = http.MultipartRequest(
       'POST',
       Uri.parse('https://api.openai.com/v1/audio/transcriptions'),
     );
-    
+
     request.headers['Authorization'] = 'Bearer $apiKey';
-    request.files.add(await http.MultipartFile.fromPath('file', audioFile.path));
+    request.files.add(
+      await http.MultipartFile.fromPath('file', audioFile.path),
+    );
     request.fields['model'] = 'whisper-1';
-    request.fields['response_format'] = 'verbose_json'; // Get language detection
-    
+    request.fields['response_format'] =
+        'verbose_json'; // Get language detection
+
     var response = await request.send();
     var responseData = await response.stream.bytesToString();
     var jsonData = jsonDecode(responseData);
-    
+
     return {
       'transcript': jsonData['text'],
       'language': _mapLanguageCode(jsonData['language']),
     };
   }
-  
+
   // Method 3: Using Google Cloud Speech-to-Text
   Future<Map<String, dynamic>> transcribeWithGoogle(File audioFile) async {
     const apiKey = 'YOUR_GOOGLE_API_KEY'; // Replace with your key
-    
+
     // Read audio file as base64
     final bytes = await audioFile.readAsBytes();
     final audioContent = base64Encode(bytes);
-    
+
     final response = await http.post(
-      Uri.parse('https://speech.googleapis.com/v1/speech:recognize?key=$apiKey'),
+      Uri.parse(
+        'https://speech.googleapis.com/v1/speech:recognize?key=$apiKey',
+      ),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'config': {
@@ -80,21 +86,19 @@ class TranscriptionService {
           'alternativeLanguageCodes': ['hi-IN', 'mr-IN'], // Add languages
           'enableAutomaticPunctuation': true,
         },
-        'audio': {
-          'content': audioContent,
-        },
+        'audio': {'content': audioContent},
       }),
     );
-    
+
     var jsonData = jsonDecode(response.body);
     var result = jsonData['results'][0];
-    
+
     return {
       'transcript': result['alternatives'][0]['transcript'],
       'language': _mapLanguageCode(result['languageCode']),
     };
   }
-  
+
   String _mapLanguageCode(String code) {
     if (code.contains('en')) return 'English';
     if (code.contains('hi')) return 'Hindi';
@@ -108,7 +112,7 @@ class TranscriptionService {
 class AIService {
   Future<String> generateSummary(String transcript, String language) async {
     const apiKey = 'YOUR_OPENAI_API_KEY';
-    
+
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/chat/completions'),
       headers: {
@@ -120,16 +124,18 @@ class AIService {
         'messages': [
           {
             'role': 'system',
-            'content': 'You are a reflection assistant. Generate concise summaries in the SAME language as the input. If Hindi/Marathi, respond in Hindi/Marathi.',
+            'content':
+                'You are a reflection assistant. Generate concise summaries in the SAME language as the input. If Hindi/Marathi, respond in Hindi/Marathi.',
           },
           {
             'role': 'user',
-            'content': 'Summarize this reflection in 2-3 sentences in $language:\n\n$transcript',
+            'content':
+                'Summarize this reflection in 2-3 sentences in $language:\n\n$transcript',
           },
         ],
       }),
     );
-    
+
     var jsonData = jsonDecode(response.body);
     return jsonData['choices'][0]['message']['content'];
   }
@@ -146,12 +152,12 @@ class RecordingScreen extends StatefulWidget {
 class RecordingScreenState extends State<RecordingScreen> {
   // final TranscriptionService _transcriptionService = TranscriptionService();
   // final AIService _aiService = AIService();
-  
+
   bool isProcessing = false;
   String processingStatus = '';
-  
+
   // Call this after recording completes
-  
+
   @override
   Widget build(BuildContext context) {
     if (isProcessing) {
@@ -172,7 +178,7 @@ class RecordingScreenState extends State<RecordingScreen> {
         ),
       );
     }
-    
+
     // Your existing recording UI
     return Scaffold(
       backgroundColor: Color(0xFF0A0A0F),
@@ -215,6 +221,7 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
           duration: sessionMap['duration'] as int,
           language: sessionMap['language'] as String,
           transcript: sessionMap['transcript'] as String,
+          words: sessionMap['words'] as List<dynamic>?,
           summary: sessionMap['summary'] as String,
           translatedTranscript: null,
         );
@@ -312,11 +319,7 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: Colors.white30,
-                      size: 20,
-                    ),
+                    Icon(Icons.chevron_right, color: Colors.white30, size: 20),
                   ],
                 ),
                 SizedBox(height: 12),
@@ -446,6 +449,42 @@ class ReflectionLibraryScreenState extends State<ReflectionLibraryScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ConfidenceAnalysisScreen(
+                        sessionId: selectedSession!.id,
+                        audioPath: selectedSession!.filePath ?? '',
+                        transcript: selectedSession!.transcript,
+                        duration: selectedSession!.duration,
+                        words: selectedSession!.words,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2A2A3A),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'See Confidence',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -481,7 +520,9 @@ class Session {
   final String language;
   final String transcript;
   final String summary;
+  final List<dynamic>? words;
   final String? translatedTranscript;
+  final String? filePath;
 
   Session({
     required this.id,
@@ -490,6 +531,8 @@ class Session {
     required this.language,
     required this.transcript,
     required this.summary,
+    this.words,
     this.translatedTranscript,
+    this.filePath,
   });
 }
